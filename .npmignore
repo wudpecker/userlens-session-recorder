@@ -1,0 +1,14 @@
+# source files
+src/
+tsconfig.json
+rollup.config.mjs
+
+# development files
+.gitignore
+.npmignore
+
+# build artifacts that shouldn't be published
+*.tsbuildinfo
+
+# node modules (shouldn't be needed but just in case)
+node_modules/
