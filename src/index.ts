@@ -108,7 +108,9 @@ export default class SessionRecorder {
 
   #resetSession() {
     this.#removeLocalSessionData();
+    this.#clearEvents();
     this.#createSession();
+    takeFullSnapshot();
   }
 
   #createSession() {
