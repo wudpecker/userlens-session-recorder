@@ -184,11 +184,16 @@ export default class SessionRecorder {
   }
 
   public stop() {
+    console.log("stop() called, rrwebStop is:", typeof this.rrwebStop);
+
     if (!this.rrwebStop) {
       return;
     }
 
+    console.log("Stopping recorder...");
     this.rrwebStop();
+    console.log("Recorder stopped, rrwebStop is now:", typeof this.rrwebStop);
+
     this.rrwebStop = null;
 
     this.#clearEvents();
