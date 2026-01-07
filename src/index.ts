@@ -107,15 +107,8 @@ export default class SessionRecorder {
   }
 
   #resetSession() {
-    if (this.rrwebStop) {
-      this.rrwebStop();
-      this.rrwebStop = null;
-    }
-
-    this.#clearEvents();
     this.#removeLocalSessionData();
-
-    this.#initRecorder();
+    this.#createSession();
   }
 
   #createSession() {
@@ -177,7 +170,7 @@ export default class SessionRecorder {
         chunkTimestamp
       );
     } catch (_) {
-      this.#resetSession();
+      this.stop();
     }
   }
 
