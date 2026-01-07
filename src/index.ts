@@ -107,10 +107,15 @@ export default class SessionRecorder {
   }
 
   #resetSession() {
-    this.#removeLocalSessionData();
+    if (this.rrwebStop) {
+      this.rrwebStop();
+      this.rrwebStop = null;
+    }
+
     this.#clearEvents();
-    this.#createSession();
-    takeFullSnapshot();
+    this.#removeLocalSessionData();
+
+    this.#initRecorder();
   }
 
   #createSession() {
