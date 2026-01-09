@@ -130,7 +130,7 @@ export default class SessionRecorder {
   }
 
   #handleVisibilityChange = () => {
-    if (document.visibilityState) {
+    if (document.visibilityState === "visible") {
       takeFullSnapshot();
     }
   };
