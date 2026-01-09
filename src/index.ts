@@ -24,9 +24,7 @@ export default class SessionRecorder {
     recordingOptions = {},
   }: SessionRecorderConfig) {
     if (typeof window === "undefined") {
-      console.error(
-        "Userlens SDK error: unavailable outside of browser environment."
-      );
+      return;
     }
     if (!WRITE_CODE?.trim()) {
       throw new Error(
@@ -37,6 +35,7 @@ export default class SessionRecorder {
       console.error(
         "Userlens SDK Error: userId is required to identify session user."
       );
+      return;
     }
 
     const {
@@ -102,7 +101,7 @@ export default class SessionRecorder {
     this.sessionEvents.push(event);
 
     if (this.sessionEvents.length >= this.BUFFER_SIZE) {
-      this.#trackEventsThrottled();
+      this.#trackEventsThrottled?.();
     }
   }
 
@@ -184,15 +183,11 @@ export default class SessionRecorder {
   }
 
   public stop() {
-    console.log("stop() called, rrwebStop is:", typeof this.rrwebStop);
-
     if (!this.rrwebStop) {
       return;
     }
 
-    console.log("Stopping recorder...");
     this.rrwebStop();
-    console.log("Recorder stopped, rrwebStop is now:", typeof this.rrwebStop);
 
     this.rrwebStop = null;
 
