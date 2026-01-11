@@ -85,6 +85,14 @@ export default class SessionRecorder {
     this.#initFocusListener();
   }
 
+  #isUserInteraction(event: eventWithTime): boolean {
+    if (event.type === 3) {
+      const source = (event.data as { source?: number })?.source;
+      return source === 2 || source === 5 || source === 6;
+    }
+    return false;
+  }
+
   #handleEvent(event: eventWithTime) {
     const now = Date.now();
     const lastActive = Number(
@@ -96,7 +104,10 @@ export default class SessionRecorder {
       this.#resetSession();
     }
 
-    localStorage.setItem("userlensSessionLastActive", now.toString());
+    // only update lastActive on actual user interactions, not DOM mutations
+    if (this.#isUserInteraction(event)) {
+      localStorage.setItem("userlensSessionLastActive", now.toString());
+    }
 
     this.sessionEvents.push(event);
 
