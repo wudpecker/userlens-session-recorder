@@ -11,3 +11,4 @@ dist/
 *.tsbuildinfo
 
 userlens-session-recorder-*.tgz
+tmpclaude-*

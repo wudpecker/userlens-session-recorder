@@ -75,14 +75,15 @@ export default class SessionRecorder {
 
     setTimeout(() => {
       this.rrwebStop = rrwebRecord({
-        emit: (event) => {
-          this.#handleEvent(event);
+        emit: (event, isCheckout) => {
+          this.#handleEvent(event, isCheckout);
         },
         maskAllInputs: this.maskingOptions.includes("all"),
         maskInputOptions: {
           password: this.maskingOptions.includes("passwords"),
         },
         plugins: [getRecordConsolePlugin()],
+        checkoutEveryNms: 30 * 1000,
       });
     }, 100);
 
@@ -97,7 +98,7 @@ export default class SessionRecorder {
     return false;
   }
 
-  #handleEvent(event: eventWithTime) {
+  #handleEvent(event: eventWithTime, _isCheckout?: boolean) {
     const now = Date.now();
     const lastActive = Number(
       localStorage.getItem("userlensSessionLastActive")
