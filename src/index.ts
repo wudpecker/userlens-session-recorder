@@ -27,9 +27,10 @@ export default class SessionRecorder {
       return;
     }
     if (!WRITE_CODE?.trim()) {
-      throw new Error(
+      console.error(
         "Userlens SDK Error: WRITE_CODE is required and must be a string"
       );
+      return;
     }
     if (!userId?.trim()) {
       console.error(
@@ -47,7 +48,10 @@ export default class SessionRecorder {
     if (typeof WRITE_CODE === "string") {
       saveWriteCode(WRITE_CODE);
     } else {
-      throw new Error("WRITE_CODE must be a string to base64 encode it");
+      console.error(
+        "Userlens SDK Error: WRITE_CODE must be a string to base64 encode it"
+      );
+      return;
     }
 
     this.userId = userId;
