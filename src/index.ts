@@ -106,6 +106,7 @@ export default class SessionRecorder {
     // check inactivity timeout
     if (lastActive && now - lastActive > this.TIMEOUT) {
       this.#resetSession();
+      takeFullSnapshot(true);
     }
 
     // only update lastActive on actual user interactions, not DOM mutations
@@ -147,7 +148,17 @@ export default class SessionRecorder {
 
   #handleVisibilityChange = () => {
     if (document.visibilityState === "visible") {
-      takeFullSnapshot();
+      if (!this.rrwebStop) return;
+
+      const now = Date.now();
+      const lastActive = Number(
+        localStorage.getItem("userlensSessionLastActive")
+      );
+      if (lastActive && now - lastActive > this.TIMEOUT) {
+        this.#resetSession();
+      }
+
+      takeFullSnapshot(true);
     }
   };
 
