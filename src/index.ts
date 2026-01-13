@@ -83,7 +83,7 @@ export default class SessionRecorder {
           password: this.maskingOptions.includes("passwords"),
         },
         plugins: [getRecordConsolePlugin()],
-        checkoutEveryNms: 30 * 1000,
+        checkoutEveryNth: 100,
       });
     }, 100);
 
