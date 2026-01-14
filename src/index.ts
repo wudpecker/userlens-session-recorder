@@ -5,10 +5,30 @@ import { getRecordConsolePlugin } from "@rrweb/rrweb-plugin-console-record";
 import { uploadSessionEvents } from "./api";
 import { generateUuid, saveWriteCode } from "./utils";
 
-import { MaskingOption, SessionRecorderConfig } from "./types";
+import {
+  MaskingOption,
+  SessionRecorderConfig,
+  OnEventsCallback,
+  RecorderMode,
+  EventBatch,
+  AutoModeConfig,
+  ManualModeConfig,
+} from "./types";
+
+export type {
+  SessionRecorderConfig,
+  AutoModeConfig,
+  ManualModeConfig,
+  EventBatch,
+  OnEventsCallback,
+  MaskingOption,
+  RecorderMode,
+};
 
 export default class SessionRecorder {
-  private userId!: string;
+  private mode!: RecorderMode;
+  private userId?: string;
+  private onEvents?: OnEventsCallback;
   private TIMEOUT!: number;
   private BUFFER_SIZE!: number;
   private maskingOptions!: MaskingOption[];
@@ -18,43 +38,51 @@ export default class SessionRecorder {
 
   #trackEventsThrottled;
 
-  constructor({
-    WRITE_CODE,
-    userId,
-    recordingOptions = {},
-  }: SessionRecorderConfig) {
+  constructor(config: SessionRecorderConfig) {
     if (typeof window === "undefined") {
       return;
     }
-    if (!WRITE_CODE?.trim()) {
-      console.error(
-        "Userlens SDK Error: WRITE_CODE is required and must be a string"
-      );
-      return;
-    }
-    if (!userId?.trim()) {
-      console.error(
-        "Userlens SDK Error: userId is required to identify session user."
-      );
-      return;
+
+    if (config.mode === "manual") {
+      // Manual mode
+      this.mode = "manual";
+
+      if (!config.onEvents || typeof config.onEvents !== "function") {
+        console.error(
+          "Userlens SDK Error: onEvents callback is required in manual mode"
+        );
+        return;
+      }
+
+      this.onEvents = config.onEvents;
+    } else {
+      // Auto mode (default)
+      this.mode = "auto";
+
+      if (!config.WRITE_CODE?.trim()) {
+        console.error(
+          "Userlens SDK Error: WRITE_CODE is required and must be a string"
+        );
+        return;
+      }
+      if (!config.userId?.trim()) {
+        console.error(
+          "Userlens SDK Error: userId is required to identify session user."
+        );
+        return;
+      }
+
+      saveWriteCode(config.WRITE_CODE);
+      this.userId = config.userId;
     }
 
+    const { recordingOptions = {} } = config;
     const {
       TIMEOUT = 30 * 60 * 1000,
       BUFFER_SIZE = 10,
       maskingOptions = ["passwords"],
     } = recordingOptions;
 
-    if (typeof WRITE_CODE === "string") {
-      saveWriteCode(WRITE_CODE);
-    } else {
-      console.error(
-        "Userlens SDK Error: WRITE_CODE must be a string to base64 encode it"
-      );
-      return;
-    }
-
-    this.userId = userId;
     this.TIMEOUT = TIMEOUT;
     this.BUFFER_SIZE = BUFFER_SIZE;
     this.maskingOptions = maskingOptions;
@@ -183,21 +211,41 @@ export default class SessionRecorder {
   }
 
   async #trackEvents() {
+    if (this.sessionEvents.length === 0) {
+      return;
+    }
+
     const chunkTimestamp =
-      this.sessionEvents[this.sessionEvents.length - 1]?.timestamp;
+      this.sessionEvents[this.sessionEvents.length - 1].timestamp;
 
     const events = [...this.sessionEvents];
     this.#clearEvents();
 
-    try {
-      await uploadSessionEvents(
-        this.userId,
-        this.sessionUuid,
-        events,
-        chunkTimestamp
-      );
-    } catch (_) {
-      this.stop();
+    if (this.mode === "manual") {
+      // Manual mode - push events to callback
+      if (this.onEvents) {
+        try {
+          this.onEvents({
+            sessionId: this.sessionUuid,
+            events,
+            chunkTimestamp,
+          });
+        } catch (_) {
+          // Don't stop on callback errors in manual mode
+        }
+      }
+    } else {
+      // Auto mode - upload to Userlens backend
+      try {
+        await uploadSessionEvents(
+          this.userId!,
+          this.sessionUuid,
+          events,
+          chunkTimestamp
+        );
+      } catch (_) {
+        this.stop();
+      }
     }
   }
 
@@ -208,6 +256,10 @@ export default class SessionRecorder {
   #removeLocalSessionData() {
     localStorage.removeItem("userlensSessionUuid");
     localStorage.removeItem("userlensSessionLastActive");
+  }
+
+  public getSessionId(): string | undefined {
+    return this.sessionUuid;
   }
 
   public stop() {
