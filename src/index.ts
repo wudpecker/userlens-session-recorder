@@ -35,8 +35,18 @@ export default class SessionRecorder {
   private sessionUuid!: string;
   private sessionEvents: eventWithTime[] = [];
   private rrwebStop: ReturnType<typeof rrwebRecord> | null = null;
+  private debug = false;
 
   #trackEventsThrottled: (() => void) | undefined;
+
+  #log(message: string, error?: unknown) {
+    if (!this.debug) return;
+    if (error) {
+      console.error(`[Userlens Session] ${message}`, error);
+    } else {
+      console.log(`[Userlens Session] ${message}`);
+    }
+  }
 
   constructor(config: SessionRecorderConfig) {
     try {
@@ -57,6 +67,9 @@ export default class SessionRecorder {
       const testKey = "__userlens_test__";
       localStorage.setItem(testKey, "1");
       localStorage.removeItem(testKey);
+
+      // Set debug mode early so it's available for error logging
+      this.debug = config.debug ?? false;
 
       if (config.mode === "manual") {
         this.mode = "manual";
@@ -90,8 +103,8 @@ export default class SessionRecorder {
       }, 5000);
 
       this.#initRecorder();
-    } catch {
-      // Any error during initialization - bail out silently
+    } catch (err) {
+      this.#log("Initialization failed", err);
       return;
     }
   }
@@ -147,8 +160,8 @@ export default class SessionRecorder {
       if (this.sessionEvents.length >= this.BUFFER_SIZE) {
         this.#trackEventsThrottled?.();
       }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      this.#log("Event handling failed", err);
     }
   }
 
@@ -192,8 +205,8 @@ export default class SessionRecorder {
 
         takeFullSnapshot(true);
       }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      this.#log("Visibility change handling failed", err);
     }
   };
 
@@ -244,8 +257,8 @@ export default class SessionRecorder {
           chunkTimestamp
         );
       }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      this.#log("Event tracking failed", err);
     }
   }
 
@@ -277,8 +290,8 @@ export default class SessionRecorder {
         "visibilitychange",
         this.#handleVisibilityChange
       );
-    } catch {
-      // Silently fail
+    } catch (err) {
+      this.#log("Stop failed", err);
     }
   }
 }

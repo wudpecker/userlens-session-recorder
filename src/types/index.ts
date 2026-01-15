@@ -23,6 +23,7 @@ export interface AutoModeConfig {
   WRITE_CODE: string;
   userId: string;
   recordingOptions?: SessionRecordingOptions;
+  debug?: boolean;
 }
 
 // Manual mode config - events pushed to callback
@@ -30,6 +31,7 @@ export interface ManualModeConfig {
   mode: "manual";
   onEvents: OnEventsCallback;
   recordingOptions?: SessionRecordingOptions;
+  debug?: boolean;
 }
 
 export type SessionRecorderConfig = AutoModeConfig | ManualModeConfig;
