@@ -36,64 +36,64 @@ export default class SessionRecorder {
   private sessionEvents: eventWithTime[] = [];
   private rrwebStop: ReturnType<typeof rrwebRecord> | null = null;
 
-  #trackEventsThrottled;
+  #trackEventsThrottled: (() => void) | undefined;
 
   constructor(config: SessionRecorderConfig) {
-    if (typeof window === "undefined") {
+    try {
+      // Check for browser environment
+      if (typeof window === "undefined") return;
+      if (typeof document === "undefined") return;
+      if (typeof localStorage === "undefined") return;
+
+      // Check for required APIs
+      if (typeof CompressionStream === "undefined") return;
+      if (typeof MutationObserver === "undefined") return;
+      if (typeof TextEncoder === "undefined") return;
+      if (typeof fetch === "undefined") return;
+      if (typeof Blob === "undefined") return;
+      if (typeof crypto === "undefined" || !crypto.getRandomValues) return;
+
+      // Check localStorage actually works (can be blocked even if defined)
+      const testKey = "__userlens_test__";
+      localStorage.setItem(testKey, "1");
+      localStorage.removeItem(testKey);
+
+      if (config.mode === "manual") {
+        this.mode = "manual";
+        if (!config.onEvents || typeof config.onEvents !== "function") {
+          return;
+        }
+        this.onEvents = config.onEvents;
+      } else {
+        this.mode = "auto";
+        if (!config.WRITE_CODE?.trim() || !config.userId?.trim()) {
+          return;
+        }
+        saveWriteCode(config.WRITE_CODE);
+        this.userId = config.userId;
+      }
+
+      const { recordingOptions = {} } = config;
+      const {
+        TIMEOUT = 30 * 60 * 1000,
+        BUFFER_SIZE = 10,
+        maskingOptions = ["passwords"],
+      } = recordingOptions;
+
+      this.TIMEOUT = TIMEOUT;
+      this.BUFFER_SIZE = BUFFER_SIZE;
+      this.maskingOptions = maskingOptions;
+      this.sessionEvents = [];
+
+      this.#trackEventsThrottled = this.#throttle(() => {
+        this.#trackEvents();
+      }, 5000);
+
+      this.#initRecorder();
+    } catch {
+      // Any error during initialization - bail out silently
       return;
     }
-
-    if (config.mode === "manual") {
-      // Manual mode
-      this.mode = "manual";
-
-      if (!config.onEvents || typeof config.onEvents !== "function") {
-        console.error(
-          "Userlens SDK Error: onEvents callback is required in manual mode"
-        );
-        return;
-      }
-
-      this.onEvents = config.onEvents;
-    } else {
-      // Auto mode (default)
-      this.mode = "auto";
-
-      if (!config.WRITE_CODE?.trim()) {
-        console.error(
-          "Userlens SDK Error: WRITE_CODE is required and must be a string"
-        );
-        return;
-      }
-      if (!config.userId?.trim()) {
-        console.error(
-          "Userlens SDK Error: userId is required to identify session user."
-        );
-        return;
-      }
-
-      saveWriteCode(config.WRITE_CODE);
-      this.userId = config.userId;
-    }
-
-    const { recordingOptions = {} } = config;
-    const {
-      TIMEOUT = 30 * 60 * 1000,
-      BUFFER_SIZE = 10,
-      maskingOptions = ["passwords"],
-    } = recordingOptions;
-
-    this.TIMEOUT = TIMEOUT;
-    this.BUFFER_SIZE = BUFFER_SIZE;
-    this.maskingOptions = maskingOptions;
-
-    this.sessionEvents = [];
-
-    this.#trackEventsThrottled = this.#throttle(() => {
-      this.#trackEvents();
-    }, 5000);
-
-    this.#initRecorder();
   }
 
   #initRecorder() {
@@ -101,19 +101,17 @@ export default class SessionRecorder {
 
     this.#createSession();
 
-    setTimeout(() => {
-      this.rrwebStop = rrwebRecord({
-        emit: (event, isCheckout) => {
-          this.#handleEvent(event, isCheckout);
-        },
-        maskAllInputs: this.maskingOptions.includes("all"),
-        maskInputOptions: {
-          password: this.maskingOptions.includes("passwords"),
-        },
-        plugins: [getRecordConsolePlugin()],
-        checkoutEveryNth: 100,
-      });
-    }, 100);
+    this.rrwebStop = rrwebRecord({
+      emit: (event, isCheckout) => {
+        this.#handleEvent(event, isCheckout);
+      },
+      maskAllInputs: this.maskingOptions.includes("all"),
+      maskInputOptions: {
+        password: this.maskingOptions.includes("passwords"),
+      },
+      plugins: [getRecordConsolePlugin()],
+      checkoutEveryNth: 100,
+    });
 
     this.#initFocusListener();
   }
@@ -127,26 +125,30 @@ export default class SessionRecorder {
   }
 
   #handleEvent(event: eventWithTime, _isCheckout?: boolean) {
-    const now = Date.now();
-    const lastActive = Number(
-      localStorage.getItem("userlensSessionLastActive")
-    );
+    try {
+      const now = Date.now();
+      const lastActive = Number(
+        localStorage.getItem("userlensSessionLastActive")
+      );
 
-    // check inactivity timeout
-    if (lastActive && now - lastActive > this.TIMEOUT) {
-      this.#resetSession();
-      takeFullSnapshot(true);
-    }
+      // check inactivity timeout
+      if (lastActive && now - lastActive > this.TIMEOUT) {
+        this.#resetSession();
+        takeFullSnapshot(true);
+      }
 
-    // only update lastActive on actual user interactions, not DOM mutations
-    if (this.#isUserInteraction(event)) {
-      localStorage.setItem("userlensSessionLastActive", now.toString());
-    }
+      // only update lastActive on actual user interactions, not DOM mutations
+      if (this.#isUserInteraction(event)) {
+        localStorage.setItem("userlensSessionLastActive", now.toString());
+      }
 
-    this.sessionEvents.push(event);
+      this.sessionEvents.push(event);
 
-    if (this.sessionEvents.length >= this.BUFFER_SIZE) {
-      this.#trackEventsThrottled?.();
+      if (this.sessionEvents.length >= this.BUFFER_SIZE) {
+        this.#trackEventsThrottled?.();
+      }
+    } catch {
+      // Silently fail
     }
   }
 
@@ -157,12 +159,12 @@ export default class SessionRecorder {
   }
 
   #createSession() {
+    const now = Date.now();
     const lastActive = Number(
       localStorage.getItem("userlensSessionLastActive")
     );
     const storedUuid = localStorage.getItem("userlensSessionUuid");
 
-    const now = Date.now();
     const isExpired = !lastActive || now - lastActive > this.TIMEOUT;
 
     if (!storedUuid || isExpired) {
@@ -176,18 +178,22 @@ export default class SessionRecorder {
   }
 
   #handleVisibilityChange = () => {
-    if (document.visibilityState === "visible") {
-      if (!this.rrwebStop) return;
+    try {
+      if (document.visibilityState === "visible") {
+        if (!this.rrwebStop) return;
 
-      const now = Date.now();
-      const lastActive = Number(
-        localStorage.getItem("userlensSessionLastActive")
-      );
-      if (lastActive && now - lastActive > this.TIMEOUT) {
-        this.#resetSession();
+        const now = Date.now();
+        const lastActive = Number(
+          localStorage.getItem("userlensSessionLastActive")
+        );
+        if (lastActive && now - lastActive > this.TIMEOUT) {
+          this.#resetSession();
+        }
+
+        takeFullSnapshot(true);
       }
-
-      takeFullSnapshot(true);
+    } catch {
+      // Silently fail
     }
   };
 
@@ -211,41 +217,35 @@ export default class SessionRecorder {
   }
 
   async #trackEvents() {
-    if (this.sessionEvents.length === 0) {
-      return;
-    }
+    try {
+      if (this.sessionEvents.length === 0) {
+        return;
+      }
 
-    const chunkTimestamp =
-      this.sessionEvents[this.sessionEvents.length - 1].timestamp;
+      const chunkTimestamp =
+        this.sessionEvents[this.sessionEvents.length - 1].timestamp;
 
-    const events = [...this.sessionEvents];
-    this.#clearEvents();
+      const events = [...this.sessionEvents];
+      this.#clearEvents();
 
-    if (this.mode === "manual") {
-      // Manual mode - push events to callback
-      if (this.onEvents) {
-        try {
+      if (this.mode === "manual") {
+        if (this.onEvents) {
           this.onEvents({
             sessionId: this.sessionUuid,
             events,
             chunkTimestamp,
           });
-        } catch (_) {
-          // Don't stop on callback errors in manual mode
         }
-      }
-    } else {
-      // Auto mode - upload to Userlens backend
-      try {
+      } else {
         await uploadSessionEvents(
           this.userId!,
           this.sessionUuid,
           events,
           chunkTimestamp
         );
-      } catch (_) {
-        this.stop();
       }
+    } catch {
+      // Silently fail
     }
   }
 
@@ -263,19 +263,22 @@ export default class SessionRecorder {
   }
 
   public stop() {
-    if (!this.rrwebStop) {
-      return;
+    try {
+      if (!this.rrwebStop) {
+        return;
+      }
+
+      this.rrwebStop();
+      this.rrwebStop = null;
+
+      this.#clearEvents();
+      this.#removeLocalSessionData();
+      window.removeEventListener(
+        "visibilitychange",
+        this.#handleVisibilityChange
+      );
+    } catch {
+      // Silently fail
     }
-
-    this.rrwebStop();
-
-    this.rrwebStop = null;
-
-    this.#clearEvents();
-    this.#removeLocalSessionData();
-    window.removeEventListener(
-      "visibilitychange",
-      this.#handleVisibilityChange
-    );
   }
 }
