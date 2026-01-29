@@ -36,6 +36,7 @@ export default class SessionRecorder {
   private sessionEvents: eventWithTime[] = [];
   private rrwebStop: ReturnType<typeof rrwebRecord> | null = null;
   private debug = false;
+  private recordCrossOriginIframes!: boolean;
 
   #trackEventsThrottled: (() => void) | undefined;
 
@@ -91,11 +92,13 @@ export default class SessionRecorder {
         TIMEOUT = 30 * 60 * 1000,
         BUFFER_SIZE = 10,
         maskingOptions = ["passwords"],
+        recordCrossOriginIframes = false,
       } = recordingOptions;
 
       this.TIMEOUT = TIMEOUT;
       this.BUFFER_SIZE = BUFFER_SIZE;
       this.maskingOptions = maskingOptions;
+      this.recordCrossOriginIframes = recordCrossOriginIframes;
       this.sessionEvents = [];
 
       this.#trackEventsThrottled = this.#throttle(() => {
@@ -122,6 +125,7 @@ export default class SessionRecorder {
       maskInputOptions: {
         password: this.maskingOptions.includes("passwords"),
       },
+      recordCrossOriginIframes: this.recordCrossOriginIframes,
       plugins: [getRecordConsolePlugin()],
       checkoutEveryNth: 100,
     });

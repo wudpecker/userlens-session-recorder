@@ -7,6 +7,7 @@ export interface SessionRecordingOptions {
   TIMEOUT?: number;
   BUFFER_SIZE?: number;
   maskingOptions?: MaskingOption[];
+  recordCrossOriginIframes?: boolean;
 }
 
 export interface EventBatch {
